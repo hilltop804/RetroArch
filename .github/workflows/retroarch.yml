@@ -21,16 +21,18 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install build-essential libxkbcommon-dev libx11-xcb-dev zlib1g-dev libfreetype6-dev libegl1-mesa-dev libgles2-mesa-dev libgbm-dev nvidia-cg-toolkit nvidia-cg-dev libavcodec-dev libsdl2-dev libsdl-image1.2-dev libxml2-dev yasm
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive flathub org.kde.Platform//5.15-22.08 org.kde.Sdk//5.15-22.08
+          mkdir repo
       - name: Checkout
         uses: actions/checkout@v3
       - name: Configure
         run: ./configure
       - name: Build
         run: |
-          make clean # making sure we don't have leftovers from previous build
-          make -j4
+          flatpak-builder builddir --repo=repo --install-deps-from=flathub --user --install --force-clean org.libretro.RetroArch.json
       - name: Upload
         uses: actions/upload-artifact@v3
         with:
           name: retroarch
-          path: retroarch          
+          path: repo/          
