@@ -476,6 +476,9 @@ static void audio_driver_flush(
 
    if (is_slowmotion)
       src_data.ratio       *= slowmotion_ratio;
+   
+   if (is_fastmotion)
+      src_data.ratio       *= fastforward_ratio;
 
    /* Note: Ideally we would divide by the user-configured
     * 'fastforward_ratio' when fast forward is enabled,
