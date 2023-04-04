@@ -14,15 +14,13 @@ permissions:
   contents: read
 
 jobs:
-  linux-c89: # Smoketest build using most restrictive compiler and default options
+  linux: # Smoketest build using most restrictive compiler and default options
     runs-on: ubuntu-latest
     steps:
       - name: Dependencies
         run: |
           sudo apt-get update -y
           sudo apt-get install build-essential libxkbcommon-dev libx11-xcb-dev zlib1g-dev libfreetype6-dev libegl1-mesa-dev libgles2-mesa-dev libgbm-dev nvidia-cg-toolkit nvidia-cg-dev libavcodec-dev libsdl2-dev libsdl-image1.2-dev libxml2-dev yasm flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --noninteractive flathub org.kde.Platform//5.15-22.08 org.kde.Sdk//5.15-22.08
           mkdir repo
       - name: Checkout
         uses: actions/checkout@v3
@@ -30,6 +28,7 @@ jobs:
         run: ./configure
       - name: Build
         run: |
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak-builder builddir --repo=repo --install-deps-from=flathub --user --install --force-clean org.libretro.RetroArch.json
       - name: Upload
         uses: actions/upload-artifact@v3
