@@ -395,6 +395,7 @@ bool audio_driver_find_driver(
 static void audio_driver_flush(
       audio_driver_state_t *audio_st,
       float slowmotion_ratio,
+      float fastforward_ratio,
       bool audio_fastforward_mute,
       const int16_t *data, size_t samples,
       bool is_slowmotion, bool is_fastmotion)
@@ -570,6 +571,7 @@ bool audio_driver_init_internal(
    bool audio_sync                = settings->bools.audio_sync;
    bool audio_rate_control        = settings->bools.audio_rate_control;
    float slowmotion_ratio         = settings->floats.slowmotion_ratio;
+   float fastforward_ratio         = settings->floats.fastforward_ratio;
    unsigned setting_audio_latency = settings->uints.audio_latency;
    unsigned runloop_audio_latency = runloop_state_get_ptr()->audio_latency;
    unsigned audio_latency         = (runloop_audio_latency > setting_audio_latency) ?
@@ -801,6 +803,7 @@ void audio_driver_sample(int16_t left, int16_t right)
          || !(audio_st->output_samples_buf)))
       audio_driver_flush(audio_st,
             config_get_ptr()->floats.slowmotion_ratio,
+            config_get_ptr()->floats.fastforward_ratio,
             config_get_ptr()->bools.audio_fastforward_mute,
             audio_st->output_samples_conv_buf,
             audio_st->data_ptr,
@@ -851,6 +854,7 @@ size_t audio_driver_sample_batch(const int16_t *data, size_t frames)
             || !(audio_st->output_samples_buf)))
          audio_driver_flush(audio_st,
                config_get_ptr()->floats.slowmotion_ratio,
+               config_get_ptr()->floats.fastforward_ratio,
                config_get_ptr()->bools.audio_fastforward_mute,
                data,
                frames_to_write << 1,
@@ -1704,6 +1708,7 @@ void audio_driver_frame_is_reverse(void)
          settings_t *settings = config_get_ptr();
          audio_driver_flush(audio_st,
                settings->floats.slowmotion_ratio,
+               settings->floats.fastforward_ratio,               
                settings->bools.audio_fastforward_mute,
                audio_st->rewind_buf  +
                audio_st->rewind_ptr,
@@ -1872,6 +1877,7 @@ void audio_driver_menu_sample(void)
       if (check_flush)
          audio_driver_flush(audio_st,
                settings->floats.slowmotion_ratio,
+               settings->floats.fastforward_ratio,
                settings->bools.audio_fastforward_mute,
                samples_buf,
                1024,
@@ -1894,6 +1900,7 @@ void audio_driver_menu_sample(void)
    if (check_flush)
       audio_driver_flush(audio_st,
             settings->floats.slowmotion_ratio,
+            settings->floats.fastforward_ratio,            
             settings->bools.audio_fastforward_mute,
             samples_buf,
             sample_count,
