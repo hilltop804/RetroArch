@@ -31,7 +31,7 @@ jobs:
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak-builder builddir --repo=repo --install-deps-from=flathub --install --force-clean org.libretro.RetroArch.json
       - name: Zip
-        run: zip repo.zip repo/ -r
+        run: sudo zip repo.zip repo/ -r
       - name: Upload
         uses: actions/upload-artifact@v3
         with:
