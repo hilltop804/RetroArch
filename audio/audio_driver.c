@@ -395,14 +395,13 @@ bool audio_driver_find_driver(
 static void audio_driver_flush(
       audio_driver_state_t *audio_st,
       float slowmotion_ratio,
-      float fastforward_ratio,
       bool audio_fastforward_mute,
       const int16_t *data, size_t samples,
-      bool is_slowmotion, bool is_fastmotion)
+      bool is_slowmotion, bool is_fastforward)
 {
    struct resampler_data src_data;
    float audio_volume_gain           = (audio_st->mute_enable ||
-         (audio_fastforward_mute && is_fastmotion))
+         (audio_fastforward_mute && is_fastforward))
                ? 0.0f 
                : audio_st->volume_gain;
 
@@ -477,27 +476,35 @@ static void audio_driver_flush(
 
    if (is_slowmotion)
       src_data.ratio       *= slowmotion_ratio;
-   
-   if (is_fastmotion)
-      src_data.ratio       *= fastforward_ratio;
 
-   /* Note: Ideally we would divide by the user-configured
-    * 'fastforward_ratio' when fast forward is enabled,
-    * but in practice this doesn't work:
-    * - 'fastforward_ratio' is only a limit. If the host
-    *   cannot push frames fast enough, the actual ratio
-    *   will be lower - and crackling will ensue
-    * - Most of the time 'fastforward_ratio' will be
-    *   zero (unlimited)
-    * So what we would need to do is measure the time since
-    * the last audio flush operation, and calculate a 'real'
-    * fast-forward ratio - but this doesn't work either.
-    * The measurement is inaccurate and the frame-by-frame
-    * fluctuations are too large, so crackling is unavoidable.
-    * Since it's going to crackle anyway, there's no point
-    * trying to do anything. Just leave the ratio as-is,
-    * and hope for the best... */
+   if (is_fastforward) {
+      const retro_time_t flush_time = cpu_features_get_time_usec();
 
+      if (audio_st->last_flush_time > 0) {
+         /* What we should see if the speed was 1.0x, converted to microsecs */
+         const double expected_flush_delta =
+            (src_data.input_frames / audio_st->input * 1000000);
+         /* Exponential moving average of the last AUDIO_FF_EXP_AVG_SAMPLES
+            samples. This helps make sure pitches are recognizable by avoiding
+            too much variance flush-to-flush.
+
+            It's not needed to avoid crackling (the generated waves are going to
+            be continuous either way), but it's important to avoid time
+            compression and decompression every single frame, which would make
+            sounds irrecognizable.
+
+            https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average */
+         const retro_time_t n = AUDIO_FF_EXP_AVG_SAMPLES;
+         audio_st->avg_flush_delta = audio_st->avg_flush_delta * (n - 1) / n +
+                                    (flush_time - audio_st->last_flush_time) / n;
+
+         /* How much does the avg_flush_delta deviate from the delta at 1.0x speed? */
+         src_data.ratio *= audio_st->avg_flush_delta / expected_flush_delta;
+      }
+
+      audio_st->last_flush_time = flush_time;
+   }
+ 
    audio_st->resampler->process(
          audio_st->resampler_data, &src_data);
 
@@ -571,7 +578,6 @@ bool audio_driver_init_internal(
    bool audio_sync                = settings->bools.audio_sync;
    bool audio_rate_control        = settings->bools.audio_rate_control;
    float slowmotion_ratio         = settings->floats.slowmotion_ratio;
-   float fastforward_ratio         = settings->floats.fastforward_ratio;
    unsigned setting_audio_latency = settings->uints.audio_latency;
    unsigned runloop_audio_latency = runloop_state_get_ptr()->audio_latency;
    unsigned audio_latency         = (runloop_audio_latency > setting_audio_latency) ?
@@ -803,7 +809,6 @@ void audio_driver_sample(int16_t left, int16_t right)
          || !(audio_st->output_samples_buf)))
       audio_driver_flush(audio_st,
             config_get_ptr()->floats.slowmotion_ratio,
-            config_get_ptr()->floats.fastforward_ratio,
             config_get_ptr()->bools.audio_fastforward_mute,
             audio_st->output_samples_conv_buf,
             audio_st->data_ptr,
@@ -854,7 +859,6 @@ size_t audio_driver_sample_batch(const int16_t *data, size_t frames)
             || !(audio_st->output_samples_buf)))
          audio_driver_flush(audio_st,
                config_get_ptr()->floats.slowmotion_ratio,
-               config_get_ptr()->floats.fastforward_ratio,
                config_get_ptr()->bools.audio_fastforward_mute,
                data,
                frames_to_write << 1,
@@ -1708,7 +1712,6 @@ void audio_driver_frame_is_reverse(void)
          settings_t *settings = config_get_ptr();
          audio_driver_flush(audio_st,
                settings->floats.slowmotion_ratio,
-               settings->floats.fastforward_ratio,               
                settings->bools.audio_fastforward_mute,
                audio_st->rewind_buf  +
                audio_st->rewind_ptr,
@@ -1877,7 +1880,6 @@ void audio_driver_menu_sample(void)
       if (check_flush)
          audio_driver_flush(audio_st,
                settings->floats.slowmotion_ratio,
-               settings->floats.fastforward_ratio,
                settings->bools.audio_fastforward_mute,
                samples_buf,
                1024,
@@ -1900,7 +1902,6 @@ void audio_driver_menu_sample(void)
    if (check_flush)
       audio_driver_flush(audio_st,
             settings->floats.slowmotion_ratio,
-            settings->floats.fastforward_ratio,            
             settings->bools.audio_fastforward_mute,
             samples_buf,
             sample_count,
